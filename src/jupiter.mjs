@@ -283,3 +283,9 @@ export async function closeEmptyTokenAccount(tokenAccount, programId) {
   logLine('closed empty token account', { signature: sig, account: tokenAccount });
   return { ok: true, signature: sig };
 }
+
+// Used by the GitHub relay before taking the lease: the wallet secret must load and match the expected address.
+export async function walletSelfCheck() {
+  await loadKeypair();
+  return true;
+}

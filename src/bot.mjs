@@ -43,7 +43,7 @@ import {
 } from './config.mjs';
 import { findDipSetups, pollTokenPrices, recordPrice } from './dip.mjs';
 import { cashBalance, findTokenAccount, loadHoldings, tokenBalance } from './holdings.mjs';
-import { closeEmptyTokenAccount, estimateRoundTrip, executeSwap, getOrder, quoteSellable, validateOrder } from './jupiter.mjs';
+import { closeEmptyTokenAccount, estimateRoundTrip, executeSwap, getOrder, quoteSellable, validateOrder, walletSelfCheck } from './jupiter.mjs';
 import { findDipWatchlist, findEntries, pairForMint } from './scan.mjs';
 import { applyPendingDepositsToState, syncDeposits } from './deposits.mjs';
 import { notifyCrash, notifyDeposit, notifyPause, notifySpotBuy, notifySpotSell, notifyStartup, startTelegramLoop, stopTelegramLoop } from './telegram.mjs';
@@ -785,6 +785,12 @@ async function main() {
   if (RELAY) {
     // GitHub relay: take the lease only if the box heartbeat is stale; otherwise exit right away.
     let start;
+    try {
+      await walletSelfCheck();
+    } catch (err) {
+      logLine('[relay] skip: wallet secret missing or does not match the trading wallet');
+      return;
+    }
     try {
       start = await relayStart();
     } catch (err) {
