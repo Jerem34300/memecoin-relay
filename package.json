@@ -1,0 +1,17 @@
+{
+  "name": "memecoin-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/bot.mjs",
+    "report": "node src/report.mjs",
+    "sweep": "node src/sweep.mjs --dry-run"
+  },
+  "dependencies": {
+    "@solana/web3.js": "3.2.1"
+  }
+}

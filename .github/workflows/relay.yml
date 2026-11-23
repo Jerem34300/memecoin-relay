@@ -1,0 +1,75 @@
+name: memecoin-relay
+
+# Only scheduled runs and manual runs by the repo owner. No pull_request / push triggers,
+# so code from forks or PRs can never run with this repo's secrets.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: memecoin-relay
+  cancel-in-progress: false
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    # Hard cap: shorter than the 13 min lease, so a killed job always loses the lease before it expires.
+    timeout-minutes: 12
+    permissions:
+      contents: read
+      actions: write   # only used by the keep-alive step (re-enables this workflow)
+    env:
+      COORD_REMOTE: git@github.com:Jerem34300/memecoin-relay-state.git
+      COORD_DIR: ${{ github.workspace }}/../coord-repo
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Access to the private state repo (deploy key, that repo only)
+        env:
+          STATE_DEPLOY_KEY: ${{ secrets.STATE_DEPLOY_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$STATE_DEPLOY_KEY" > ~/.ssh/state_key
+          chmod 600 ~/.ssh/state_key
+          curl -fsSL https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' > ~/.ssh/known_hosts
+          echo "GIT_SSH_COMMAND=ssh -i $HOME/.ssh/state_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
+
+      - name: Is the box asleep?
+        id: check
+        run: node relay/check.mjs
+
+      - name: Install dependencies
+        if: steps.check.outputs.go == 'true'
+        run: npm ci --omit=dev --no-audit --no-fund --loglevel=error
+
+      - name: Relay trading session
+        if: steps.check.outputs.go == 'true'
+        env:
+          WALLET_KEY_JSON: ${{ secrets.WALLET_KEY_JSON }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RELAY_SESSION_MS: '270000'
+        run: bash relay/session.sh
+
+      - name: Keep the schedule alive (GitHub disables idle schedules after 60 days)
+        if: always() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$(date -u +%H)" = "03" ]; then
+            gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/relay.yml/enable" >/dev/null && echo "keep-alive ok"
+          fi
+
+      - name: Remove key
+        if: always()
+        run: rm -f ~/.ssh/state_key
