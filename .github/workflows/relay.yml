@@ -79,11 +79,13 @@ jobs:
         run: bash relay/session.sh
 
       - name: Keep the schedule alive (GitHub disables idle schedules after 60 days)
-        if: always() && github.event_name == 'schedule'
+        if: always() && (github.event_name == 'schedule' || inputs.selftest)
         env:
           GH_TOKEN: ${{ github.token }}
+          FORCE_KEEPALIVE: ${{ inputs.selftest && '1' || '0' }}
         run: |
-          if [ "$(date -u +%H)" = "03" ] || [ "$(date -u +%H)" = "15" ]; then
+          H="$(date -u +%H)"
+          if [ "$FORCE_KEEPALIVE" = "1" ] || [ "$H" = "03" ] || [ "$H" = "15" ]; then
             gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/relay.yml/enable" >/dev/null && echo "keep-alive ok"
           fi
 
