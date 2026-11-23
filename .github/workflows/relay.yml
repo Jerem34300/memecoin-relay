@@ -58,7 +58,7 @@ jobs:
         run: |
           npm ci --omit=dev --no-audit --no-fund --loglevel=error
           umask 077; W="$RUNNER_TEMP/w.json"; printf '%s' "$WALLET_KEY_JSON" > "$W"
-          WALLET_PATH="$W" node relay/selftest.mjs; rc=$?; rm -f "$W"; exit $rc
+          rc=0; WALLET_PATH="$W" node relay/selftest.mjs || rc=$?; rm -f "$W"; exit $rc
 
       - name: Is the box asleep?
         id: check
