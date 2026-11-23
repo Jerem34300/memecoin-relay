@@ -11,6 +11,7 @@ if [[ -z "${WALLET_KEY_JSON:-}" ]]; then echo "[relay] wallet secret missing"; e
 printf '%s' "$WALLET_KEY_JSON" > "$W"
 unset WALLET_KEY_JSON
 export WALLET_PATH="$W" RELAY_MODE=1
+mkdir -p data
 rc=0
 node src/bot.mjs > "$LOG" 2>&1 || rc=$?
 # Public log: coordination lines and a short summary only (no balances, no amounts).
