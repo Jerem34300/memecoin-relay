@@ -83,7 +83,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "$(date -u +%H)" = "03" ]; then
+          if [ "$(date -u +%H)" = "03" ] || [ "$(date -u +%H)" = "15" ]; then
             gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/relay.yml/enable" >/dev/null && echo "keep-alive ok"
           fi
 
