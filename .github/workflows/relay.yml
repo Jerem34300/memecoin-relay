@@ -26,11 +26,11 @@ jobs:
       COORD_REMOTE: git@github.com:Jerem34300/memecoin-relay-state.git
       COORD_DIR: ${{ github.workspace }}/../coord-repo
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
 
