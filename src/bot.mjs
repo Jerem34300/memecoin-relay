@@ -79,8 +79,8 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 // ---- in-process watchdog -------------------------------------------------
 // Progress = one main-loop iteration finished (tick_complete or a caught tick error).
 // Measured on the monotonic clock, so a box pause does not count as a hang.
-const WATCHDOG_MS = Number(process.env.WATCHDOG_MS || 180_000);
-const WATCHDOG_SWAP_MS = Number(process.env.WATCHDOG_SWAP_MS || 360_000); // extra room while a swap is in flight
+const WATCHDOG_MS = Number(process.env.WATCHDOG_MS || 90_000);
+const WATCHDOG_SWAP_MS = Number(process.env.WATCHDOG_SWAP_MS || 300_000); // extra room while a swap is in flight
 let lastProgress = performance.now();
 function markProgress() {
   lastProgress = performance.now();
@@ -98,8 +98,19 @@ const watchdogTimer = setInterval(() => {
     }
     process.exit(1);
   }
-}, 15_000);
+}, 5_000);
 watchdogTimer.unref();
+
+// Mid-tick heartbeat for the bash supervisor (it watches health.json's mtime).
+function touchHealth() {
+  try {
+    const f = `${DATA_DIR}/health.json`;
+    const now = new Date();
+    fs.utimesSync(f, now, now);
+  } catch {
+    /* ignore */
+  }
+}
 
 async function sleepMaybe(ms) {
   const end = Date.now() + ms;
@@ -700,8 +711,45 @@ async function maybeEnterMomentum(state, snapshot) {
   return enterPosition(state, snapshot, best, { mode: 'momentum' });
 }
 
+// Slow, non-critical work runs in the background so it can never delay the stop-loss checks.
+// Deposit scan: read-only RPC scan; new deposits are appended to deposits.jsonl (deduped by tx)
+// and folded into the state by applyPendingDepositsToState() on the next tick.
+const DEPOSIT_SCAN_EVERY_MS = 3 * 60_000;
+const WATCH_REFRESH_TIMEOUT_MS = 60_000;
+let depositJob = null;
+let lastDepositScan = 0;
+let watchJob = null;
+
+function startDepositScan() {
+  if (RELAY || depositJob || Date.now() - lastDepositScan < DEPOSIT_SCAN_EVERY_MS) return;
+  lastDepositScan = Date.now();
+  depositJob = syncDeposits(null)
+    .then((recorded) => {
+      for (const d of recorded) {
+        logLine('deposit recorded', {
+          tx: d.tx,
+          sol: d.amount,
+          eur: Number(num(d.eur, 0).toFixed(4)),
+          usd: Number(num(d.usd, 0).toFixed(4)),
+        });
+        notifyDeposit({ amount: d.amount, asset: d.asset || 'SOL', eur: d.eur, tx: d.tx }).catch(() => {});
+      }
+    })
+    .catch((err) => logLine('deposit scan failed', { error: err?.message || String(err) }))
+    .finally(() => { depositJob = null; });
+}
+
+function withDeadline(promise, ms, label) {
+  let t;
+  return Promise.race([
+    promise.finally(() => clearTimeout(t)),
+    new Promise((_, rej) => { t = setTimeout(() => rej(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms); }),
+  ]);
+}
+
 async function tick(cycleNo, { refreshWatch, watchlist }) {
   let snapshot = await loadHoldings();
+  markProgress();
   let state = loadState();
   if (!state) {
     state = initState(snapshot);
@@ -715,59 +763,61 @@ async function tick(cycleNo, { refreshWatch, watchlist }) {
     if (state.dayKey && state.dayMomentumEntries == null) state.dayMomentumEntries = 0;
   }
   state.strategyMode = STRATEGY_MODE;
-  if (!RELAY) try {
-    applyPendingDepositsToState(state);
-    const recorded = await syncDeposits(state);
-    for (const d of recorded) {
-      logLine('deposit recorded', {
-        tx: d.tx,
-        sol: d.amount,
-        eur: Number(num(d.eur, 0).toFixed(4)),
-        usd: Number(num(d.usd, 0).toFixed(4)),
-      });
-      notifyDeposit({ amount: d.amount, asset: d.asset || 'SOL', eur: d.eur, tx: d.tx }).catch(() => {});
+  if (!RELAY) {
+    try {
+      applyPendingDepositsToState(state);
+    } catch (err) {
+      logLine('deposit apply failed', { error: err.message || String(err) });
     }
-  } catch (err) {
-    logLine('deposit scan failed', { error: err.message || String(err) });
   }
   state = applyDrawdownGuard(state, snapshot);
 
-  let list = watchlist;
-  let refreshedWatch = false;
-  if (refreshWatch) {
-    const exclude = new Set(state.positions.map((p) => p.mint));
-    list = await findDipWatchlist({ excludeMints: exclude, maxReports: DIP_WATCHLIST_SIZE });
-    refreshedWatch = true;
-  }
-
-  const hints = new Map();
-  const toPoll = [
-    ...list,
-    ...state.positions.map((p) => ({
+  // 1) Open positions first: price them and apply stops / take-profits before any slow scan.
+  if (state.positions.length) {
+    const hints = new Map();
+    const priced = await pollTokenPrices(state.positions.map((p) => ({
       mint: p.mint,
       symbol: p.symbol,
       pairAddress: p.pairAddress,
       priceUsd: p.peakPriceUsd || p.entryPriceUsd,
-    })),
-  ];
-  const unique = [];
-  const seen = new Set();
-  for (const t of toPoll) {
-    if (!t.mint || seen.has(t.mint)) continue;
-    seen.add(t.mint);
-    unique.push(t);
-  }
-  if (unique.length) {
-    const priced = await pollTokenPrices(unique);
+    })));
     for (const t of priced) {
       if (t.priceUsd > 0) hints.set(t.mint, t.priceUsd);
     }
-    list = list.map((t) => priced.find((x) => x.mint === t.mint) || t);
+    markProgress();
+    const managed = await managePositions(state, snapshot, hints);
+    state = managed.state;
+    snapshot = managed.snapshot;
+    saveState(state);
+    markProgress();
+    touchHealth();
   }
 
-  const managed = await managePositions(state, snapshot, hints);
-  state = managed.state;
-  snapshot = managed.snapshot;
+  // 2) Background deposit scan (never blocks the tick).
+  startDepositScan();
+
+  // 3) Dip watchlist refresh, bounded: on timeout keep the previous list and retry next tick.
+  let list = watchlist;
+  let refreshedWatch = false;
+  if (refreshWatch) {
+    const exclude = new Set(state.positions.map((p) => p.mint));
+    if (!watchJob) {
+      watchJob = findDipWatchlist({ excludeMints: exclude, maxReports: DIP_WATCHLIST_SIZE })
+        .finally(() => { watchJob = null; });
+    }
+    try {
+      list = (await withDeadline(watchJob, WATCH_REFRESH_TIMEOUT_MS, 'dip watchlist refresh')).filter((t) => !exclude.has(t.mint));
+      refreshedWatch = true;
+    } catch (err) {
+      logLine(`watchlist refresh skipped: ${err?.message || err}`);
+    }
+    markProgress();
+  }
+
+  if (list.length) {
+    const priced = await pollTokenPrices(list);
+    list = list.map((t) => priced.find((x) => x.mint === t.mint) || t);
+  }
 
   const dip = await maybeEnterDip(state, snapshot, list);
   state = dip.state;

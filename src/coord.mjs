@@ -17,8 +17,8 @@ const TRACK = `refs/remotes/origin/${BRANCH}`;
 
 // Protocol timings (shared by both sides).
 export const BOX_PUBLISH_EVERY_MS = 60_000; // box heartbeat cadence
-export const BOX_FRESH_MS = 5 * 60_000; // box opens/closes trades only if its last heartbeat write is newer than this
-export const BOX_STALE_MS = 8 * 60_000; // relay may start only if the box heartbeat is older than this
+export const BOX_FRESH_MS = 3 * 60_000; // box opens/closes trades only if its last heartbeat write is newer than this
+export const BOX_STALE_MS = 6 * 60_000; // relay may start only if the box heartbeat is older than this (3 min margin over FRESH)
 export const RELAY_LEASE_MS = 13 * 60_000; // relay lease lifetime (> the job's hard timeout)
 export const MAX_RELAY_TRADES = 400;
 

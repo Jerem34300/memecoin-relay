@@ -63,6 +63,8 @@ jobs:
       - name: Is the box asleep?
         id: check
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.selftest) }}
+        env:
+          CHECK_WAIT_MS: '240000'   # watch the box for up to 4 min (checks every 60 s) before handing over
         run: node relay/check.mjs
 
       - name: Install dependencies
@@ -79,7 +81,7 @@ jobs:
         run: bash relay/session.sh
 
       - name: Keep the schedule alive (GitHub disables idle schedules after 60 days)
-        if: always() && (github.event_name == 'schedule' || inputs.selftest)
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           FORCE_KEEPALIVE: ${{ inputs.selftest && '1' || '0' }}
@@ -87,6 +89,19 @@ jobs:
           H="$(date -u +%H)"
           if [ "$FORCE_KEEPALIVE" = "1" ] || [ "$H" = "03" ] || [ "$H" = "15" ]; then
             gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/relay.yml/enable" >/dev/null && echo "keep-alive ok"
+          fi
+
+      - name: Chain the next run (GitHub cron is throttled to a few runs a day; this keeps the watch continuous)
+        # Off switch: `gh workflow disable relay.yml` (dispatch then fails and the chain stops).
+        if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.selftest) && steps.check.outputs.chain != 'false' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sleep 5
+          if gh run list -R "$GITHUB_REPOSITORY" --workflow relay.yml --status queued --json databaseId -q 'length' | grep -qv '^0$'; then
+            echo "a run is already queued, not chaining"
+          else
+            gh workflow run relay.yml -R "$GITHUB_REPOSITORY" --ref "${GITHUB_REF_NAME:-main}" && echo "next run queued"
           fi
 
       - name: Remove key

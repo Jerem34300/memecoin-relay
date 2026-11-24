@@ -1,10 +1,10 @@
 // Coordination logic between the box bot and the GitHub Actions relay (see coord.mjs for the store).
 //
 // Invariants (never two traders at once):
-//  - The box only swaps while its last successful heartbeat write is < BOX_FRESH_MS (5 min) old and no
+//  - The box only swaps while its last successful heartbeat write is < BOX_FRESH_MS (3 min) old and no
 //    relay lease is known. It writes a heartbeat every ~60 s in the background.
-//  - The relay only starts when the box heartbeat is > BOX_STALE_MS (8 min) old and takes a lease with a
-//    compare-and-swap write. 8 min > 5 min, so a box that is still trading always blocks the relay.
+//  - The relay only starts when the box heartbeat is > BOX_STALE_MS (6 min) old and takes a lease with a
+//    compare-and-swap write. 6 min > 3 min, so a box that is still trading always blocks the relay.
 //  - A box that wakes up (heartbeat too old) first syncs: if a relay lease is active it stops trading,
 //    tells the relay it is back, and waits; then it adopts the relay's state and trades before trading again.
 import fs from 'node:fs';
