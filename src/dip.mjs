@@ -176,3 +176,26 @@ export function findDipSetups(tokens) {
   setups.sort((a, b) => a.signal.drop - b.signal.drop);
   return setups;
 }
+
+// 24 h high of a pool from GeckoTerminal hourly candles (cached 10 min). null if unknown.
+const highCache = new Map();
+export async function high24h(pairAddress) {
+  if (!pairAddress) return null;
+  const hit = highCache.get(pairAddress);
+  if (hit && Date.now() - hit.t < 10 * 60 * 1000) return hit.high;
+  try {
+    const data = await fetchJson(
+      `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pairAddress}/ohlcv/hour?aggregate=1&limit=25&currency=usd`,
+      { timeoutMs: 12_000, retries: 1 },
+    );
+    const list = data?.data?.attributes?.ohlcv_list || [];
+    const cutoff = Date.now() / 1000 - 24 * 3600;
+    const highs = list.filter((c) => c[0] >= cutoff - 3600).map((c) => num(c[2], 0)).filter((v) => v > 0);
+    const high = highs.length ? Math.max(...highs) : null;
+    highCache.set(pairAddress, { t: Date.now(), high });
+    return high;
+  } catch (err) {
+    logLine(`24h high lookup failed: ${err.message}`);
+    return null;
+  }
+}

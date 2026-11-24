@@ -77,12 +77,12 @@ export const DIP_MIN_LIQ_USD = 80_000;
 export const DIP_MIN_VOL_H24 = 60_000;
 export const DIP_MIN_VOL_H1 = 10_000;
 export const DIP_MIN_H1_CHANGE = 0;
-export const DIP_MIN_H6_CHANGE = 5;
+export const DIP_MIN_H6_CHANGE = 0;
 export const DIP_PULLBACK_MIN = -0.10;
 export const DIP_PULLBACK_MAX = -0.05;
-export const DIP_TAKE_PROFIT = 0.08;
-export const DIP_TAKE_PROFIT_MAX = 0.10;
-export const DIP_STOP = -0.06;
+export const DIP_TAKE_PROFIT = 0.06;
+export const DIP_TAKE_PROFIT_MAX = 0.07;
+export const DIP_STOP = -0.05;
 // Rebound confirmation (since 2026-11-23 19h): the low must be 5-12% under the recent high,
 // price must already be back >=1.5% above that low with 2 rising samples in a row (>=15 s apart),
 // at least 6 samples seen by the bot, and still >=3% under the high so there is room to rebound.
@@ -90,12 +90,17 @@ export const DIP_MIN_SAMPLES = 6;
 export const DIP_BOUNCE_MIN = 0.015;
 export const DIP_ROOM_BELOW_HIGH = 0.03;
 export const DIP_KNIFE_MAX = -0.12;
-export const DIP_MIN_BUY_RATIO = 0.8;
+export const DIP_MIN_BUY_RATIO = 1.1;
+// Selection rules added 2026-11-24 (backtest + live review): never buy a token that is
+// more than 30 % under its 24 h high (collapsing), require h1 >= 0 and h6 >= 0 at the
+// moment of the buy, and no momentum (chasing) buys at all.
+export const DIP_MAX_BELOW_24H_HIGH = -0.30;
+export const MOMENTUM_ENABLED = false;
 export const DIP_TRAIL_ACTIVATE = 0.05;
 export const DIP_TRAIL_GIVEBACK = 0.025;
 export const DIP_TIME_STOP_MS = 20 * 60 * 1000;
 export const DIP_TIME_STOP_MIN_PNL = 0.03;
-export const DIP_MAX_ROUND_TRIP = 0.025;
+export const DIP_MAX_ROUND_TRIP = 0.02;
 export const DIP_TP_BUFFER = 0.045;
 export const DIP_MAX_TRADE_USD = 4.5;
 export const DIP_MAX_ENTRIES_PER_TICK = 1;
@@ -103,9 +108,9 @@ export const DIP_WATCHLIST_SIZE = 20;
 export const NET_FEE_LAMPORTS_PER_TX = 25_000;
 
 // Master switch for NEW spot buys (open positions are always managed).
-export const SPOT_ENTRIES_ENABLED = false;
+export const SPOT_ENTRIES_ENABLED = true;
 export const STRATEGY_MODE = 'dip-rebound';
-export const STRATEGY_BLURB_FR = "Le robot fait des allers-retours prudents : il n'achète un jeton solide (au moins 80 000 $ de liquidité, en hausse sur 6 heures, beaucoup d'échanges) qu'après une baisse de 5 à 12 % ET une fois que le prix est déjà reparti à la hausse (il ne rattrape plus un couteau qui tombe). Il revend vers +8 à 10 %, coupe à −6 %, au plus 2 positions à la fois et 10 achats par jour. Un jeton qui a fait perdre est interdit pour 24 h. Il refuse les échanges dont les frais aller-retour dépassent 2,5 %, paie d'abord en CASH, garde un peu de SOL pour les frais, et s'arrête pour la journée si le compte baisse de 18 %. Il surveille les prix toutes les 15 secondes.";
+export const STRATEGY_BLURB_FR = "Le robot est devenu plus sélectif (règles du 24/11) : il n'achète plus jamais un jeton qui s'effondre. Il faut au moins 80 000 $ de liquidité, beaucoup d'échanges, un prix stable ou en hausse sur 1 heure ET sur 6 heures, plus d'acheteurs que de vendeurs (au moins 1,1 acheteur pour 1 vendeur), et un prix à moins de 30 % de son plus haut des dernières 24 heures. Il n'achète qu'après une petite baisse de 5 à 12 % suivie d'un rebond déjà confirmé. Plus aucun achat « coup de folie » (mode momentum, coupé). Il revend vers +6 à 7 %, coupe la perte à −5 %, refuse un échange dont les frais aller-retour dépassent 2 %, au plus 2 positions à la fois et 10 achats par jour. Un jeton qui a fait perdre est interdit pour 24 h. Il paie d'abord en CASH, garde un peu de SOL pour les frais, s'arrête pour la journée si le compte baisse de 18 % et surveille les prix toutes les 15 secondes. Moins d'achats qu'avant, mais mieux choisis : rien n'est garanti.";
 export const RUGCHECK_CACHE_MS = 20 * 60 * 1000;
 
 export const ALLOWED_DEX = new Set([

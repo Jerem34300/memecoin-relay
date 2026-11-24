@@ -42,8 +42,13 @@ import {
   WATCHLIST_REFRESH_MS,
   SPOT_ENTRIES_ENABLED,
   DATA_DIR,
+  DIP_MIN_BUY_RATIO,
+  DIP_MIN_H1_CHANGE,
+  DIP_MIN_H6_CHANGE,
+  DIP_MAX_BELOW_24H_HIGH,
+  MOMENTUM_ENABLED,
 } from './config.mjs';
-import { findDipSetups, pollTokenPrices, recordPrice } from './dip.mjs';
+import { findDipSetups, high24h, pollTokenPrices, recordPrice } from './dip.mjs';
 import { cashBalance, findTokenAccount, loadHoldings, tokenBalance } from './holdings.mjs';
 import { closeEmptyTokenAccount, estimateRoundTrip, executeSwap, getOrder, quoteSellable, validateOrder, walletSelfCheck } from './jupiter.mjs';
 import { findDipWatchlist, findEntries, pairForMint } from './scan.mjs';
@@ -631,6 +636,25 @@ async function maybeEnterDip(state, snapshot, watchlist) {
       logLine(`dip candidate ${best.symbol} is in cooldown`);
       continue;
     }
+    // Stricter selection (2026-11-24): live trend, buy pressure and distance from the 24 h high.
+    {
+      const why = [];
+      if (num(best.h1, -1) < DIP_MIN_H1_CHANGE) why.push(`h1 ${best.h1}%`);
+      if (num(best.h6, -1) < DIP_MIN_H6_CHANGE) why.push(`h6 ${best.h6}%`);
+      const b = num(best.buys, 0);
+      const s = num(best.sells, 0);
+      if (b < s * DIP_MIN_BUY_RATIO) why.push(`buy/sell ${b}/${s}`);
+      if (!why.length) {
+        const hi = await high24h(best.pairAddress);
+        const px = num(best.priceUsd, 0);
+        if (!(hi > 0) || !(px > 0)) why.push('24h high unknown');
+        else if (px / hi - 1 < DIP_MAX_BELOW_24H_HIGH) why.push(`${((px / hi - 1) * 100).toFixed(0)}% under 24h high`);
+      }
+      if (why.length) {
+        logLine(`dip candidate ${best.symbol} rejected by selection`, why);
+        continue;
+      }
+    }
     logLine('dip setup', {
       symbol: best.symbol,
       mint: best.mint,
@@ -652,6 +676,7 @@ async function maybeEnterDip(state, snapshot, watchlist) {
 }
 
 async function maybeEnterMomentum(state, snapshot) {
+  if (!MOMENTUM_ENABLED) return state;
   const blocked = canEnter(state, snapshot, { mode: 'momentum' });
   if (blocked) {
     logLine(`skip momentum entries: ${blocked}`);
