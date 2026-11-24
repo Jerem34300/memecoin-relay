@@ -57,7 +57,7 @@ export function perpsSnapshot({ solUsd, usdEur }) {
     : p
       ? `Position ouverte : il parie sur la ${p.side === 'long' ? 'hausse' : 'baisse'} du SOL (x3), stop à ${num(p.sl).toFixed(2)} $, objectif ${num(p.tp).toFixed(2)} $.`
       : 'Aucune position ouverte, il attend une tendance nette du SOL.';
-  const line = `Test Perps (SOL x3, mise max 5 €) : ${e2(equityUsd * fx)} sur le compte Perps + ${e2(rentUsd * fx)} de caution rendue à la fermeture = ${e2(valueEur)}, pour ${e2(out.eur)} transférés depuis le robot, soit ${signed(pnlEur)}. ${closes.length} pari(s) terminé(s), ${wins} gagnant(s). ${posTxt}${killed ? '' : pid ? ` (tourne, PID ${pid})` : ' (processus arrêté)'}`;
+  const line = `Test Perps (SOL x3, la mise suit le solde du compte, les gains sont réinvestis) : ${e2(equityUsd * fx)} sur le compte Perps + ${e2(rentUsd * fx)} de caution rendue à la fermeture = ${e2(valueEur)}, pour ${e2(out.eur)} transférés depuis le robot, soit ${signed(pnlEur)}. ${closes.length} pari(s) terminé(s), ${wins} gagnant(s). ${posTxt}${killed ? '' : pid ? ` (tourne, PID ${pid})` : ' (processus arrêté)'}`;
   return { equityUsd, equityEur: equityUsd * fx, rentSol, rentUsd, rentEur: rentUsd * fx, valueUsd, valueEur, transferredEur: out.eur, transferredUsd: out.usd, pnlEur, trades: closes.length, wins, running: Boolean(pid), pid, killed, position: p || null, line, updatedAt: st.last?.at || null };
 }
 

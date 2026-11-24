@@ -102,6 +102,8 @@ export const DIP_MAX_ENTRIES_PER_TICK = 1;
 export const DIP_WATCHLIST_SIZE = 20;
 export const NET_FEE_LAMPORTS_PER_TX = 25_000;
 
+// Master switch for NEW spot buys (open positions are always managed).
+export const SPOT_ENTRIES_ENABLED = false;
 export const STRATEGY_MODE = 'dip-rebound';
 export const STRATEGY_BLURB_FR = "Le robot fait des allers-retours prudents : il n'achète un jeton solide (au moins 80 000 $ de liquidité, en hausse sur 6 heures, beaucoup d'échanges) qu'après une baisse de 5 à 12 % ET une fois que le prix est déjà reparti à la hausse (il ne rattrape plus un couteau qui tombe). Il revend vers +8 à 10 %, coupe à −6 %, au plus 2 positions à la fois et 10 achats par jour. Un jeton qui a fait perdre est interdit pour 24 h. Il refuse les échanges dont les frais aller-retour dépassent 2,5 %, paie d'abord en CASH, garde un peu de SOL pour les frais, et s'arrête pour la journée si le compte baisse de 18 %. Il surveille les prix toutes les 15 secondes.";
 export const RUGCHECK_CACHE_MS = 20 * 60 * 1000;

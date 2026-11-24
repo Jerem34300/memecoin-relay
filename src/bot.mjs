@@ -40,6 +40,8 @@ import {
   TRAIL_ACTIVATE,
   TRAIL_GIVEBACK,
   WATCHLIST_REFRESH_MS,
+  SPOT_ENTRIES_ENABLED,
+  DATA_DIR,
 } from './config.mjs';
 import { findDipSetups, pollTokenPrices, recordPrice } from './dip.mjs';
 import { cashBalance, findTokenAccount, loadHoldings, tokenBalance } from './holdings.mjs';
@@ -583,6 +585,8 @@ async function managePositions(state, snapshot, priceHints = new Map()) {
 
 function canEnter(state, snapshot, { mode }) {
   if (!entriesAllowed()) return `coordination: ${coordMode()} (no new buys)`;
+  if (!SPOT_ENTRIES_ENABLED) return 'entries disabled in config (SPOT_ENTRIES_ENABLED=false)';
+  if (fs.existsSync(`${DATA_DIR}/entries.off`)) return 'entries paused (data/entries.off)';
   if (isPaused(state)) return `paused (${state.pauseReason}) until ${state.pausedUntil}`;
   if ((state.dayEntries || 0) >= MAX_ENTRIES_PER_DAY) return 'daily entry cap reached';
   if (mode === 'momentum' && (state.dayMomentumEntries || 0) >= MAX_MOMENTUM_ENTRIES_PER_DAY) {
